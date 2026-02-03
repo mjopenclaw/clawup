@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+*.js.map
+
+# Personal Data
+data/*.db
+data/*.db-journal
+data/videos/
+memory/
+state/
+
+# Sensitive Config
+config/config.yaml
+config/monitor.env
+config/bounds.yaml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment
+.env
+.env.*
+!.env.example

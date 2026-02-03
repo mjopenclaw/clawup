@@ -1,0 +1,31 @@
+name: check-notifications
+description: X/Threads 알림 확인 → event_queue에 저장
+enabled: true
+
+preconditions: []  # 항상 실행
+
+steps:
+  - name: check-x-notifications
+    type: script
+    command: "core/scripts/browser/check-x-notifications.js"
+    output: x_events
+    on_fail: continue
+
+  - name: check-threads-notifications
+    type: script
+    command: "core/scripts/browser/check-threads-notifications.js"
+    output: threads_events
+    on_fail: continue
+
+  - name: save-events
+    type: script
+    command: "core/scripts/save-events.sh"
+    args: ["${x_events}", "${threads_events}"]
+
+on_success:
+  - type: log
+    message: "✅ 알림 체크 완료"
+
+on_failure:
+  - type: log
+    message: "⚠️ 알림 체크 부분 실패: ${error}"

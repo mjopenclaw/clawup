@@ -1,0 +1,269 @@
+# daily-planner.yaml - 일일 계획 수립기
+# 매일 아침 오늘의 활동 계획 수립
+
+planner:
+  id: daily-planner
+  name: "일일 계획 수립기"
+  description: "매일 아침 상황 분석 후 오늘의 활동 계획 수립"
+
+  # === 스케줄 ===
+  schedule:
+    cron: "0 8 * * *"                  # 매일 오전 8시
+    timezone: "Asia/Seoul"
+    enabled: true
+
+  # === 입력 정보 ===
+  inputs:
+    # 현재 상태
+    - id: "current_state"
+      queries:
+        - name: "goals_progress"
+          query: |
+            SELECT goal_id, name, current_value, target_value,
+                   ROUND(current_value * 100.0 / target_value, 1) as progress
+            FROM goals WHERE active = 1
+
+        - name: "yesterdays_activity"
+          query: |
+            SELECT action_type, COUNT(*) as count
+            FROM activity_log
+            WHERE date(created_at) = date('now', '-1 day')
+            GROUP BY action_type
+
+        - name: "content_queue"
+          query: |
+            SELECT COUNT(*) as pending FROM content_queue
+            WHERE status = 'pending'
+
+        - name: "daily_limits_remaining"
+          query: |
+            SELECT
+              ${bounds.sns.posting.max_per_day} -
+                (SELECT COUNT(*) FROM posts WHERE date(posted_at) = date('now')) as posts_remaining,
+              ${bounds.sns.engagement.max_likes_per_day} -
+                (SELECT COUNT(*) FROM activity_log WHERE action_type = 'like' AND date(created_at) = date('now')) as likes_remaining
+
+    # 규칙 및 전략
+    - id: "active_rules"
+      source: "state/rules.yaml"
+
+    # 진행 중인 실험
+    - id: "running_experiments"
+      source: "state/experiments.yaml"
+      filter: "status == 'running'"
+
+    # 특별 이벤트
+    - id: "special_events"
+      check:
+        - "holidays"
+        - "trending_topics"
+        - "scheduled_campaigns"
+
+  # === 계획 수립 프로세스 ===
+  process:
+    steps:
+      # 1. 상황 분석
+      - name: "analyze_situation"
+        action: "llm_analyze"
+        prompt: |
+          현재 상황을 분석해줘.
+
+          **목표 진행 상황:**
+          {goals_progress}
+
+          **어제 활동:**
+          {yesterdays_activity}
+
+          **콘텐츠 큐:**
+          대기 중: {content_queue.pending}개
+
+          **활성 규칙:**
+          {active_rules.summary}
+
+          **진행 중인 실험:**
+          {running_experiments}
+
+          분석 출력 (JSON):
+          {
+            "goal_priorities": ["우선순위 높은 목표"],
+            "bottlenecks": ["병목 현상"],
+            "opportunities": ["오늘의 기회"],
+            "risks": ["주의 사항"]
+          }
+        output: "situation_analysis"
+
+      # 2. 오늘의 목표 설정
+      - name: "set_daily_goals"
+        action: "determine_goals"
+        based_on:
+          - "${situation_analysis}"
+          - "${goals_progress}"
+          - "${daily_limits_remaining}"
+        output: "daily_goals"
+
+      # 3. 활동 계획 수립
+      - name: "plan_activities"
+        action: "llm_plan"
+        prompt: |
+          오늘의 활동 계획을 수립해줘.
+
+          **상황 분석:**
+          {situation_analysis}
+
+          **오늘 목표:**
+          {daily_goals}
+
+          **남은 한도:**
+          {daily_limits_remaining}
+
+          **활성 규칙 (timing):**
+          최적 시간: {active_rules.timing.best_hours}
+          피할 시간: {active_rules.timing.avoid_hours}
+
+          계획 출력 형식 (JSON):
+          {
+            "posting_plan": {
+              "count": 2,
+              "times": ["14:00", "19:00"],
+              "content_ids": [1, 2]
+            },
+            "engagement_plan": {
+              "likes_target": 30,
+              "follows_target": 10,
+              "replies_target": 5,
+              "focus_time": "10:00-12:00"
+            },
+            "research_plan": {
+              "topics": ["AI trends", "automation"],
+              "time": "09:00-10:00"
+            },
+            "experiment_tasks": [
+              "실험 X 데이터 수집"
+            ],
+            "special_tasks": []
+          }
+        output: "activity_plan"
+
+      # 4. 우선순위 정렬
+      - name: "prioritize"
+        action: "rank_tasks"
+        criteria:
+          - factor: "goal_impact"
+            weight: 0.4
+          - factor: "deadline"
+            weight: 0.3
+          - factor: "effort"
+            weight: 0.2
+          - factor: "opportunity_window"
+            weight: 0.1
+        output: "prioritized_plan"
+
+      # 5. 일정 최적화
+      - name: "optimize_schedule"
+        action: "schedule_tasks"
+        constraints:
+          - "respect_timing_rules"
+          - "avoid_conflicts"
+          - "batch_similar_tasks"
+        output: "optimized_schedule"
+
+  # === 출력 ===
+  output:
+    # 일일 계획 문서
+    plan_document:
+      path: "memory/daily/${date}-plan.md"
+      template: |
+        # 📅 일일 계획: {date}
+
+        > 생성: {timestamp}
+
+        ## 🎯 오늘의 목표
+
+        {daily_goals_list}
+
+        ## 📊 현재 상황
+
+        ### 목표 진행률
+        {goals_progress_table}
+
+        ### 어제 활동 요약
+        {yesterday_summary}
+
+        ## 📋 오늘의 계획
+
+        ### ⏰ 시간대별 일정
+
+        {schedule_timeline}
+
+        ### 📝 포스팅 계획
+        - 예정 포스트: {posting_plan.count}개
+        - 시간: {posting_plan.times}
+        - 콘텐츠: {posting_plan.content_preview}
+
+        ### 💬 인게이지먼트 계획
+        - 좋아요: {engagement_plan.likes_target}
+        - 팔로우: {engagement_plan.follows_target}
+        - 답글: {engagement_plan.replies_target}
+        - 집중 시간: {engagement_plan.focus_time}
+
+        ### 🔬 실험 태스크
+        {experiment_tasks}
+
+        ## ⚠️ 주의 사항
+
+        {risks_and_notes}
+
+        ---
+        *이 계획은 상황에 따라 조정될 수 있습니다.*
+
+    # 실행 가능한 태스크
+    executable_tasks:
+      path: "data/today_tasks.json"
+      format: |
+        {
+          "date": "{date}",
+          "tasks": [
+            {
+              "id": "task_1",
+              "type": "post",
+              "scheduled_time": "14:00",
+              "params": {...},
+              "status": "pending"
+            }
+          ]
+        }
+
+    # 알림
+    notification:
+      channel: "telegram"
+      send_at: "08:00"
+      message: |
+        ☀️ **오늘의 계획**
+
+        📅 {date}
+
+        🎯 **목표**
+        {daily_goals_brief}
+
+        📋 **주요 계획**
+        - 포스팅: {posting_plan.count}개 ({posting_plan.times})
+        - 인게이지먼트: 좋아요 {likes}, 팔로우 {follows}
+
+        {special_notes}
+
+        자세한 계획: memory/daily/{date}-plan.md
+
+  # === 계획 실행 추적 ===
+  execution_tracking:
+    # 실시간 진행 상황 추적
+    track_completion: true
+
+    # 저녁 회고
+    evening_review:
+      schedule: "0 22 * * *"           # 저녁 10시
+      generate_report: true
+
+  # === 로깅 ===
+  logging:
+    log_plans: true
+    log_path: "data/planning_log.json"

@@ -1,0 +1,131 @@
+## 🔄 워크플로우
+
+### SNS 콘텐츠 포스팅
+
+```
+1. 리서치 또는 대화에서 콘텐츠 추출
+2. X 포스팅 → 알림 전송
+3. Threads 포스팅 → 알림 전송
+4. 블로그에 긴 글 작성 (3개마다)
+5. 스크린샷 캡처 (이미지 로딩 대기)
+6. 블로그에 캡처 포함해서 발행
+7. git push → 배포
+```
+
+### 📱 SNS 활동 모니터링
+
+**모든 SNS 활동은 텔레그램으로 알림:**
+
+```bash
+# 포스트
+sns-notify.sh post x "트윗 내용"
+sns-notify.sh post threads "스레드 내용"
+
+# 팔로우
+sns-notify.sh follow x "@username"
+sns-notify.sh unfollow x "@username"
+
+# 댓글
+sns-notify.sh reply x "댓글 내용"
+```
+
+**자동 기록:**
+- 텔레그램 알림 → `@molt_monitor_bot`
+- DB 기록 → `sns.db`
+
+### ⚠️ 주의사항
+- **Threads 절대 빼먹지 말 것**
+- 브라우저 캡처 시 이미지 로딩 완전히 대기
+- 특정 요소만 캡처 (전체 페이지 X)
+
+---
+
+### 블로그 배포
+
+```bash
+cd ~/projects/mj-blog
+# 글 작성
+vercel --prod  # 배포
+```
+
+**이미지 경로**: `assets/` → raw.githubusercontent.com URL
+
+---
+
+### 정보 탐색
+
+**❌ 하지 말 것**: 민제님께 물어보기
+**✅ 해야 할 것**: 스스로 찾기
+
+```bash
+# 경로 찾기
+find ~ -name "*keyword*" -type d
+
+# 파일 찾기  
+grep -r "검색어" ~/.openclaw/workspace/
+
+# 히스토리
+history | grep "명령어"
+```
+
+---
+
+### 피드백 반영 (AGENTS.md 자동 갱신)
+
+1. {{ $user.name }}{{ $user.honorific }} 피드백 받음
+2. 해당 컴포넌트 즉시 수정 (SSOT)
+3. **즉시 컴파일** (옵션 B):
+   ```bash
+   cd ~/projects/openclaw-framework
+   mdx compile core/AGENTS.template.mdx --context config/config.yaml --db moneylobster.db -o ~/.openclaw/workspace/AGENTS.md
+   ```
+4. `memory/feedback-log.md`에 기록
+5. 같은 피드백 3회 → 규칙 강화
+
+**옵션 A (Cron 주기적 컴파일)**: 매시간 자동 컴파일 Cron도 활성화
+
+---
+
+### Cron 동적 관리
+
+**권장치**: 1000개 (정적 아님)
+**관리 방식**: 맥 상태 체크하면서 동적 조절
+
+```bash
+# 리소스 체크 후 Cron 조절
+CPU > 80% → 워커 일시 중지
+Memory > 90% → 비필수 워커 정리
+정상 상태 → 필요한 만큼 운영
+```
+
+---
+
+### 실수 발생 시
+
+1. `memory/learnings.md`에 기록
+2. 원인 분석
+3. 방지책 도출
+4. 같은 실수 3회 → 컴포넌트에 규칙 추가
+
+---
+
+### 프레임워크 수정 시 (자동 GitHub)
+
+**모든 프레임워크 변경은 자동으로 GitHub에 올림:**
+
+```bash
+cd ~/projects/openclaw-framework
+git add -A
+git commit -m "feat/fix/docs: 변경 내용"
+git push origin main
+```
+
+**포함 대상:**
+- `core/components/*.mdx` — 템플릿 수정
+- `core/hooks/*` — hook 추가/수정
+- `config/config.yaml` — 설정 변경
+- `scripts/*` — 스크립트 추가
+
+**install.sh 실행 조건:**
+- hooks 변경 시 → `./scripts/install.sh`
+- 컴포넌트만 변경 시 → mdx compile만

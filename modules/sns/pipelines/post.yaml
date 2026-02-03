@@ -1,0 +1,195 @@
+# post.yaml - 포스팅 파이프라인
+# 콘텐츠 큐에서 가져와서 포스팅하는 파이프라인
+
+pipeline:
+  id: post-content
+  name: "콘텐츠 포스팅"
+  description: "큐에서 콘텐츠를 가져와 검증 후 포스팅"
+
+  # === 스케줄 ===
+  schedule:
+    cron: "0 10,14,19 * * *"           # 하루 3회: 10시, 14시, 19시
+    timezone: "Asia/Seoul"
+    enabled: true
+
+  # === 실행 조건 ===
+  conditions:
+    # 규칙 기반 타이밍 체크
+    timing_check:
+      use_rules: true
+      rules_path: "state/rules.yaml"
+      check: "timing.best_hours"
+      confidence_threshold: 0.5
+
+  # === 실행 단계 ===
+  steps:
+    # --- Step 1: 규칙 로드 ---
+    - name: "load_rules"
+      action: "read_yaml"
+      path: "state/rules.yaml"
+      output: "rules"
+
+    # --- Step 2: 타이밍 체크 ---
+    - name: "check_timing"
+      action: "evaluate"
+      condition: |
+        rules.timing.confidence < 0.5 OR
+        current_hour in rules.timing.best_hours OR
+        rules.timing.best_hours.length == 0
+      on_fail:
+        action: "skip_with_log"
+        message: "현재 시간({current_hour}시)은 최적 포스팅 시간이 아닙니다"
+
+    # --- Step 3: 큐에서 콘텐츠 가져오기 ---
+    - name: "get_content"
+      action: "queue_pop"
+      query: |
+        SELECT * FROM content_queue
+        WHERE status = 'pending'
+        AND (scheduled_at IS NULL OR scheduled_at <= datetime('now'))
+        ORDER BY priority DESC, created_at ASC
+        LIMIT 1
+      output: "content"
+      on_empty:
+        action: "exit"
+        message: "포스팅할 콘텐츠가 없습니다"
+
+    # --- Step 4: 톤 적용 ---
+    - name: "adapt_tone"
+      service: "shared/tone/${content.target_channel.tone_ref}"
+      input: "${content.raw_content}"
+      output: "toned_content"
+
+    # --- Step 5: 길이 조정 ---
+    - name: "adapt_length"
+      service: "shared/transformer/adapt-length"
+      input: "${toned_content}"
+      params:
+        target_length: "${content.target_channel.max_length}"
+        platform: "${content.target_channel.id}"
+      output: "final_content"
+
+    # --- Step 6: 유사도 검증 ---
+    - name: "validate_similarity"
+      service: "shared/validator/similarity"
+      input: "${final_content}"
+      params:
+        platform: "${content.target_channel.id}"
+      on_fail:
+        action: "rephrase"
+        service: "llm_rephrase"
+        max_retries: 2
+
+    # --- Step 7: 금지어 검증 ---
+    - name: "validate_forbidden"
+      service: "shared/validator/forbidden"
+      input: "${final_content}"
+      on_fail:
+        action: "skip"
+        message: "금지된 콘텐츠 감지: {matched_pattern}"
+
+    # --- Step 8: 검토 (선택적) ---
+    - name: "review"
+      enabled: "${config.require_review}"
+      service: "shared/approval/telegram"
+      input: "${final_content}"
+      params:
+        target_channel: "${content.target_channel.name}"
+        scheduled_time: "now"
+      timeout_minutes: 60
+      on_timeout: "skip"
+      on_reject:
+        action: "mark_rejected"
+        update_queue: true
+
+    # --- Step 9: 포스팅 실행 ---
+    - name: "execute_post"
+      action: "channel_post"
+      channel: "${content.target_channel.id}"
+      script: "${content.target_channel.actions.post.script}"
+      input: "${final_content}"
+      output: "post_result"
+
+    # --- Step 10: 결과 기록 ---
+    - name: "record_result"
+      action: "db_insert"
+      table: "posts"
+      data:
+        platform: "${content.target_channel.id}"
+        content: "${final_content}"
+        posted_at: "now()"
+        post_id: "${post_result.post_id}"
+        status: "posted"
+        queue_id: "${content.id}"
+
+    # --- Step 11: 큐 업데이트 ---
+    - name: "update_queue"
+      action: "db_update"
+      table: "content_queue"
+      where: "id = ${content.id}"
+      set:
+        status: "posted"
+        posted_at: "now()"
+        post_id: "${post_result.post_id}"
+
+    # --- Step 12: 크로스 포스팅 (선택적) ---
+    - name: "cross_post"
+      enabled: "${content.target_channel.cross_posting.enabled}"
+      for_each: "target in content.target_channel.cross_posting.target_channels"
+      delay_minutes: "${content.target_channel.cross_posting.delay_minutes}"
+      steps:
+        - action: "queue_add"
+          table: "content_queue"
+          data:
+            raw_content: "${final_content}"
+            target_channel: "${target}"
+            source_post_id: "${post_result.post_id}"
+            scheduled_at: "now() + ${delay_minutes} minutes"
+            priority: -1               # 낮은 우선순위
+
+  # === 결과 처리 ===
+  on_complete:
+    - action: "notify"
+      channel: "telegram"
+      message: |
+        ✅ 포스팅 완료
+
+        **채널**: ${content.target_channel.name}
+        **콘텐츠**: ${final_content.substring(0, 100)}...
+
+        📊 대기 중인 콘텐츠: ${queue_remaining}개
+
+    - action: "log"
+      message: "Posted to ${content.target_channel.id}: ${post_result.post_id}"
+
+    # 24시간 후 분석 트리거
+    - action: "schedule_task"
+      task: "analyze_post_performance"
+      delay_hours: 24
+      params:
+        post_id: "${post_result.post_id}"
+
+  on_error:
+    - action: "notify"
+      channel: "telegram"
+      message: "❌ 포스팅 실패: ${error}"
+
+    - action: "db_update"
+      table: "content_queue"
+      where: "id = ${content.id}"
+      set:
+        status: "failed"
+        error: "${error}"
+        retry_count: "retry_count + 1"
+
+    # 재시도 (최대 3회)
+    - action: "retry"
+      max_attempts: 3
+      delay_minutes: 30
+      condition: "retry_count < 3"
+
+  # === 로깅 ===
+  logging:
+    log_runs: true
+    log_path: "data/pipeline_post.json"
+    include_content: true

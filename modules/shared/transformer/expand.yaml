@@ -1,0 +1,120 @@
+# expand.yaml - 확장 변환기
+# 짧은 콘텐츠를 풍부하게 확장
+
+transformer:
+  id: expand
+  name: "확장기"
+  description: "짧은 콘텐츠를 구체적 예시와 맥락으로 확장"
+
+  # === 확장 방법 ===
+  method: "llm"
+
+  # === 기본 설정 ===
+  defaults:
+    min_expansion_ratio: 1.5           # 최소 1.5배 확장
+    max_expansion_ratio: 3.0           # 최대 3배 확장
+    target_length: null                # 지정 시 해당 길이까지
+
+  # === LLM 프롬프트 ===
+  prompt: |
+    다음 짧은 콘텐츠를 더 풍부하게 확장해줘.
+
+    원본:
+    ---
+    {content}
+    ---
+
+    목표 길이: {target_length}자
+
+    확장 규칙:
+    1. 원본 메시지 유지
+    2. 구체적 예시 추가
+    3. 관련 맥락/배경 보충
+    4. 독자가 공감할 수 있는 요소 추가
+    5. 자연스러운 흐름 유지
+    6. 원본의 톤 유지 ({tone})
+
+    주의:
+    - 억지로 늘리지 말 것
+    - 의미 없는 반복 X
+    - 새로운 주장 추가 X (기존 주장만 보강)
+
+    출력 형식: 확장된 텍스트만 (설명 없이)
+
+  # === 확장 전략 ===
+  strategies:
+    # 예시 추가
+    - type: "add_example"
+      trigger: "general_statement"     # 일반적 진술일 때
+      template: "{statement} 예를 들어, {example}"
+
+    # 맥락 추가
+    - type: "add_context"
+      trigger: "lacks_background"      # 배경 설명 부족 시
+      template: "{background} {original}"
+
+    # 경험 추가
+    - type: "add_experience"
+      trigger: "opinion_without_proof"
+      template: "{opinion} 실제로 {experience}"
+
+    # 데이터 추가
+    - type: "add_data"
+      trigger: "claim_without_evidence"
+      template: "{claim} (실제로 {data})"
+
+  # === 확장 요소 ===
+  expansion_elements:
+    - element: "구체적 예시"
+      priority: 1
+      when: "추상적 진술"
+      how: "실제 사례, 구체적 상황 묘사"
+
+    - element: "관련 맥락"
+      priority: 2
+      when: "배경 지식 필요"
+      how: "이 문제가 왜 중요한지 설명"
+
+    - element: "독자 공감"
+      priority: 3
+      when: "감정 연결 부족"
+      how: "~해본 적 있지 않나요?, 많이들 경험하는..."
+
+    - element: "결론/CTA"
+      priority: 4
+      when: "마무리 약함"
+      how: "그래서 ~해보세요, 한번 시도해볼 만해요"
+
+  # === 제한 사항 ===
+  constraints:
+    # 추가하면 안 되는 것
+    forbidden:
+      - "새로운 주장 (원본에 없는)"
+      - "검증되지 않은 데이터"
+      - "과도한 수식어"
+      - "의미 없는 반복"
+
+    # 톤 유지
+    preserve_tone: true
+    preserve_style: true
+
+  # === 품질 체크 ===
+  quality_checks:
+    - name: "의미 일관성"
+      description: "원본 메시지와 일치하는지"
+      method: "semantic_similarity"
+      threshold: 0.8
+
+    - name: "자연스러움"
+      description: "확장이 자연스러운지"
+      method: "fluency_check"
+
+    - name: "반복 없음"
+      description: "불필요한 반복이 없는지"
+      method: "repetition_check"
+
+  # === 로깅 ===
+  logging:
+    log_expansions: true
+    log_path: "data/expansion_log.json"
+    include_original: true

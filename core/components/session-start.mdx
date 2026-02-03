@@ -1,0 +1,26 @@
+## 🚀 세션 시작 체크리스트
+
+### 1. 시스템 확인
+{{{ components/system-check.mdx }}}
+
+### 2. 오늘 날짜
+- **오늘**: {{ $today }}
+- **현재**: {{ $now }}
+
+### 3. 빠른 현황
+- X: {{ $accounts.x.handle }}
+- Threads: {{ $accounts.threads.handle }}
+
+### 4. 대기 작업
+{{{ sql: SELECT action, priority FROM work_queue WHERE status='pending' ORDER BY priority DESC LIMIT 5 | format:list }}}
+
+### 5. 이전 Context 복구
+{{{ sql: SELECT summary, topics FROM session_summaries ORDER BY created_at DESC LIMIT 3 | format:list }}}
+
+### 6. 핵심 리마인더
+- 피드백 → 컴포넌트 수정 (SSOT)
+- 실수 → learnings.md 기록
+- 정보 필요 → 스스로 찾기 (민제님께 묻지 말 것)
+- **context 잃으면** → `sns.db` 조회
+
+> 💡 AI 요약 Cron이 매시간 대화를 compact하게 요약

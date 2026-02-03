@@ -1,0 +1,39 @@
+# ClawUp Configuration
+# Copy to config.yaml and customize
+
+agent:
+  name: "My AI Assistant"
+  emoji: "🤖"
+  language: "ko"
+  timezone: "Asia/Seoul"
+
+user:
+  name: "User"
+
+accounts:
+  x:
+    handle: "@your_handle"
+    enabled: true
+  threads:
+    handle: "@your_handle"
+    enabled: false
+
+goals:
+  x_followers:
+    name: "X Followers"
+    target: 1000
+    current: 0
+    metric: "followers"
+    priority: 1
+
+content:
+  topics:
+    - "AI"
+    - "automation"
+  tone: "informative yet friendly"
+
+schedule:
+  posting_times:
+    - "09:00"
+    - "18:00"
+  timezone: "Asia/Seoul"

@@ -1,0 +1,49 @@
+# _template.yaml - Tone Adapter 템플릿
+# 새 말투를 추가할 때 이 템플릿을 복사해서 사용하세요.
+
+tone:
+  # === 기본 정보 ===
+  id: "{tone_id}"                     # 고유 ID (파일명과 동일)
+  name: "{Tone Name}"                 # 표시 이름
+  description: "{말투 설명}"
+
+  # === 기본 규칙 ===
+  rules:
+    - "{규칙 1}"
+    - "{규칙 2}"
+    - "{규칙 3}"
+
+  # === 변환 예시 ===
+  examples:
+    - input: "이 기능이 좋습니다"
+      output: "{변환된 결과}"
+      note: "{왜 이렇게 변환했는지}"
+
+    - input: "감사합니다"
+      output: "{변환된 결과}"
+
+  # === 금지 사항 ===
+  forbidden:
+    - "{절대 사용하면 안 되는 표현}"
+
+  # === 선호 표현 ===
+  preferred:
+    - "{권장 표현 1}"
+    - "{권장 표현 2}"
+
+  # === 이모지 설정 ===
+  emoji:
+    allowed: true                     # true | false
+    max_count: 2                      # 최대 개수
+    preferred: ["😊", "👍"]           # 선호 이모지
+    forbidden: ["💩"]                 # 금지 이모지
+
+  # === 문장 구조 ===
+  sentence:
+    endings: []                       # 문장 끝맺음 패턴
+    connectors: []                    # 연결어
+    max_length: null                  # 문장 최대 길이
+
+  # === LLM 프롬프트 힌트 ===
+  prompt_hint: |
+    {LLM에게 이 말투로 변환하도록 지시하는 프롬프트}

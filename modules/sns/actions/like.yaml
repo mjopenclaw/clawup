@@ -1,0 +1,99 @@
+# like.yaml - 좋아요 액션 정의
+
+action:
+  id: like
+  name: "좋아요"
+  description: "관련 콘텐츠에 좋아요 누르기"
+  type: "interact"
+
+  # === 경계 참조 ===
+  bounds_ref: "sns.engagement"
+  daily_limit_key: "max_likes_per_day"
+
+  # === 사전 검사 ===
+  pre_checks:
+    - check: "daily_limit"
+      query: |
+        SELECT COUNT(*) as count FROM activity_log
+        WHERE action_type = 'like'
+        AND platform = '{channel}'
+        AND date(created_at) = date('now')
+      condition: "count < ${bounds.sns.engagement.max_likes_per_day}"
+      on_fail: "skip"
+
+    - check: "not_already_liked"
+      query: |
+        SELECT COUNT(*) as count FROM activity_log
+        WHERE action_type = 'like'
+        AND target_id = '{post_id}'
+      condition: "count == 0"
+      on_fail: "skip"
+
+  # === 타겟 선택 ===
+  targeting:
+    # 타겟 소스
+    sources:
+      - source: "feed"
+        description: "홈 피드에서 관련 콘텐츠"
+        filter:
+          topics: "${state.rules.engagement.like_targeting.prefer_topics}"
+          exclude_topics: "${state.rules.engagement.like_targeting.avoid_topics}"
+          min_engagement: 10
+          max_age_hours: 24
+
+      - source: "notifications"
+        description: "알림에서 멘션/답글"
+        priority: "high"
+
+      - source: "target_accounts"
+        description: "관심 계정의 포스트"
+        accounts: "${config.targeting.follow_targets.interests}"
+
+    # 선택 전략
+    selection:
+      method: "relevance_score"        # relevance_score | random | chronological
+      batch_size: 10
+      cooldown_between_minutes: 1
+
+  # === 실행 단계 ===
+  steps:
+    - name: "select_targets"
+      action: "query_targets"
+      params:
+        limit: "${batch_size}"
+        filters: "${targeting.sources}"
+      output: "targets"
+
+    - name: "execute_likes"
+      for_each: "target in targets"
+      steps:
+        - action: "browser_click"
+          script: "${channel.actions.like.script}"
+          params:
+            post_id: "${target.id}"
+            selector: "${channel.actions.like.selector}"
+
+        - action: "record"
+          table: "activity_log"
+          data:
+            action_type: "like"
+            platform: "${channel.id}"
+            target_id: "${target.id}"
+            target_author: "${target.author}"
+            created_at: "now()"
+
+        - action: "wait"
+          duration: "${channel.actions.like.cooldown_minutes * 60}s"
+
+  # === 결과 처리 ===
+  on_success:
+    - log: "Liked {count} posts on {channel}"
+    - metric: "increment likes_today by {count}"
+
+  on_failure:
+    - log: "Like failed: {error}"
+
+  # === 로깅 ===
+  logging:
+    log_likes: true
+    log_path: "data/engagement_log.json"

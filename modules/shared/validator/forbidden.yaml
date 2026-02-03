@@ -1,0 +1,112 @@
+# forbidden.yaml - 금지어/민감 주제 검증기
+# 금지된 단어, 패턴, 주제를 검사
+
+validator:
+  id: forbidden-check
+  name: "금지어 검사"
+  description: "금지어 및 민감 주제 검사"
+
+  # === 검사 패턴 ===
+  patterns:
+    # === 정치 관련 ===
+    - id: "politics"
+      category: "정치"
+      regex: "(정치|선거|투표|대통령|국회|여당|야당|정권)"
+      action: block
+      severity: critical
+      message: "정치 관련 콘텐츠는 포스팅할 수 없습니다"
+
+    # === 종교 관련 ===
+    - id: "religion"
+      category: "종교"
+      regex: "(종교|신앙|교회|절|성당|이슬람|기독교|불교)"
+      action: block
+      severity: critical
+      message: "종교 관련 콘텐츠는 포스팅할 수 없습니다"
+
+    # === 도박 관련 ===
+    - id: "gambling"
+      category: "도박"
+      regex: "(도박|베팅|카지노|슬롯|포커|경마)"
+      action: block
+      severity: critical
+
+    # === 성인 콘텐츠 ===
+    - id: "adult"
+      category: "성인"
+      regex: "(섹스|야동|포르노|성인물)"
+      action: block
+      severity: critical
+
+    # === 혐오/차별 ===
+    - id: "hate"
+      category: "혐오"
+      regex: "(혐오|차별|인종|성차별)"
+      action: block
+      severity: critical
+
+    # === 광고/홍보 (경고만) ===
+    - id: "promotion"
+      category: "광고"
+      regex: "(광고|홍보|판매|할인|쿠폰|무료배송)"
+      action: warn
+      severity: medium
+      message: "광고성 콘텐츠로 보입니다. 계속하시겠습니까?"
+
+    # === 링크 과다 사용 ===
+    - id: "too_many_links"
+      category: "스팸"
+      regex: "(https?://[^\\s]+.*){3,}"  # 3개 이상 링크
+      action: warn
+      severity: low
+      message: "링크가 너무 많습니다. 스팸으로 인식될 수 있습니다."
+
+  # === 금지 단어 목록 ===
+  forbidden_words:
+    - word: "꽁머니"
+      action: block
+    - word: "재테크 비법"
+      action: warn
+    - word: "무료 구독"
+      action: warn
+
+  # === 감지 시 동작 ===
+  on_match:
+    block:
+      action: "stop"
+      notify: true
+      log: true
+
+    warn:
+      action: "prompt_user"
+      options:
+        - "수정 후 진행"
+        - "그대로 진행"
+        - "취소"
+
+    log:
+      action: "continue"
+      log: true
+
+  # === 예외 처리 ===
+  exceptions:
+    # 특정 컨텍스트에서는 허용
+    - context: "뉴스 인용"
+      patterns: ["politics"]
+      condition: "starts_with('인용:')"
+
+    - context: "기술 토론"
+      patterns: ["promotion"]
+      condition: "topic == 'tech_review'"
+
+  # === 세부 설정 ===
+  settings:
+    case_sensitive: false
+    check_variations: true            # 변형 표현도 검사 (정ㅊㅣ → 정치)
+
+  # === 로깅 ===
+  logging:
+    log_matches: true
+    log_path: "data/forbidden_log.json"
+    alert_on_critical: true
+    alert_channel: "telegram"

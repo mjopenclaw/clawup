@@ -1,0 +1,44 @@
+name: follow-user
+description: event_queue에서 팔로우할 유저 처리
+enabled: true
+
+preconditions:
+  - type: sql
+    query: "SELECT COUNT(*) as cnt FROM event_queue WHERE queue_type='follow' AND status='pending'"
+    expect: "cnt > 0"
+
+steps:
+  - name: get-target
+    type: sql
+    query: |
+      SELECT id, platform, target_user 
+      FROM event_queue 
+      WHERE queue_type='follow' AND status='pending' 
+      ORDER BY priority DESC, created_at ASC 
+      LIMIT 1
+    output: target
+
+  - name: check-already-following
+    type: script
+    command: "core/scripts/browser/check-following.js"
+    args: ["${target.platform}", "${target.target_user}"]
+    output: already_following
+
+  - name: do-follow
+    type: script
+    command: "core/scripts/browser/follow-user.js"
+    args: ["${target.platform}", "${target.target_user}"]
+    condition: "!already_following"
+    on_fail: continue
+
+  - name: mark-done
+    type: sql
+    query: "UPDATE event_queue SET status='done', processed_at=datetime('now') WHERE id=${target.id}"
+
+on_success:
+  - type: sql
+    query: "INSERT INTO follows (platform, username) VALUES ('${target.platform}', '${target.target_user}')"
+
+on_failure:
+  - type: sql
+    query: "UPDATE event_queue SET status='failed', processed_at=datetime('now') WHERE id=${target.id}"

@@ -1,0 +1,74 @@
+{
+  "name": "openclaw-framework",
+  "version": "1.0.0",
+  "description": "AI 에이전트를 위한 자가 발전 자동화 프레임워크",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "bin": {
+    "openclaw": "./dist/cli/index.js",
+    "ocf": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/cli/index.ts",
+    "start": "node dist/cli/index.js",
+    "cli": "tsx src/cli/index.ts",
+    "post": "tsx src/cli/index.ts post",
+    "engage": "tsx src/cli/index.ts engage",
+    "status": "tsx src/cli/index.ts status",
+    "run": "tsx src/cli/index.ts run",
+    "config": "tsx src/cli/index.ts config",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "setup": "./setup.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mjopenclaw/openclaw-framework.git"
+  },
+  "keywords": [
+    "ai",
+    "automation",
+    "sns",
+    "self-improving",
+    "framework"
+  ],
+  "author": "mjopenclaw",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mjopenclaw/openclaw-framework/issues"
+  },
+  "homepage": "https://github.com/mjopenclaw/openclaw-framework#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "cron-parser": "^5.5.0",
+    "dotenv": "^17.2.3",
+    "js-yaml": "^4.1.1",
+    "yaml": "^2.7.1",
+    "node-fetch": "^3.3.2",
+    "ora": "^9.1.0",
+    "playwright": "^1.58.1",
+    "string-similarity": "^4.0.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.15.29",
+    "@types/string-similarity": "^4.0.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+  }
+}

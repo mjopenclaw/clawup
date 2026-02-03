@@ -1,0 +1,70 @@
+# dashboard-generator.yaml - 대시보드 생성 Cron
+# 정기적으로 대시보드를 생성하고 알림 발송
+
+cron:
+  id: dashboard-generator
+  name: "대시보드 생성기"
+  description: "활동 현황 대시보드 생성 및 텔레그램 발송"
+
+  # === 스케줄 ===
+  schedule:
+    cron: "0 9,21 * * *"               # 아침 9시, 저녁 9시
+    timezone: "Asia/Seoul"
+    enabled: true
+
+  # === 실행 단계 ===
+  steps:
+    # 1. 대시보드 서비스 호출
+    - name: "generate_dashboard"
+      service: "shared/dashboard/activity"
+      output: "dashboard_content"
+
+    # 2. 마크다운 파일 저장
+    - name: "save_markdown"
+      action: "write_file"
+      path: "memory/dashboard.md"
+      content: "${dashboard_content.markdown}"
+
+    # 3. 텔레그램 발송 (아침만)
+    - name: "send_telegram_morning"
+      condition: "current_hour == 9"
+      action: "telegram_send"
+      target: "${config.telegram.monitor.chat_id}"
+      message: |
+        ☀️ **아침 대시보드**
+
+        ${dashboard_content.summary}
+
+        📊 자세한 내용: memory/dashboard.md
+
+    # 4. 텔레그램 발송 (저녁)
+    - name: "send_telegram_evening"
+      condition: "current_hour == 21"
+      action: "telegram_send"
+      target: "${config.telegram.monitor.chat_id}"
+      message: |
+        🌙 **저녁 대시보드**
+
+        ${dashboard_content.summary}
+
+        **오늘의 성과:**
+        ${dashboard_content.today_highlights}
+
+        📊 자세한 내용: memory/dashboard.md
+
+  # === 추가 트리거 ===
+  additional_triggers:
+    # 목표 달성 시
+    - event: "goal_achieved"
+      action: "generate_and_notify"
+      message_prefix: "🎉 **목표 달성!**"
+
+    # 특별 이벤트 시
+    - event: "milestone_reached"
+      action: "generate_and_notify"
+      message_prefix: "🏆 **마일스톤 달성!**"
+
+  # === 로깅 ===
+  logging:
+    log_runs: true
+    log_path: "data/cron_dashboard.json"

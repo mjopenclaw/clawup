@@ -1,0 +1,50 @@
+---
+name: growth
+description: SNS 성장 파이프라인 (5분마다)
+schedule: "*/5 * * * *"
+---
+
+# Growth Pipeline
+
+<Include path="config/config.yaml" as="config" />
+
+## 현재 상태
+
+<SQL db="data/sns.db" name="stats">
+SELECT 
+  (SELECT x_followers FROM daily_stats ORDER BY date DESC LIMIT 1) as x_followers,
+  (SELECT threads_followers FROM daily_stats ORDER BY date DESC LIMIT 1) as threads_followers,
+  (SELECT COUNT(*) FROM event_queue WHERE status='pending') as pending_events,
+  (SELECT COUNT(*) FROM content_queue WHERE posted=0) as pending_content
+</SQL>
+
+- X 팔로워: {stats.x_followers}
+- Threads 팔로워: {stats.threads_followers}
+- 대기 이벤트: {stats.pending_events}
+- 대기 콘텐츠: {stats.pending_content}
+
+## Tasks
+
+### 1. 알림 체크
+<Task name="check-notifications" />
+
+### 2. 팔로우 처리 (최대 2개)
+<If condition="stats.pending_events > 0">
+  <Task name="follow-user" repeat="2" />
+</If>
+
+### 3. 콘텐츠 포스팅 (일 6개 미만일 때)
+<SQL db="data/sns.db" name="today_posts">
+SELECT COUNT(*) as cnt FROM posts WHERE date(created_at) = date('now')
+</SQL>
+
+<If condition="today_posts.cnt < 6 AND stats.pending_content > 0">
+  <Task name="post-content" />
+</If>
+
+## 결과 기록
+
+<SQL db="data/sns.db">
+INSERT OR REPLACE INTO daily_stats (date, x_followers, threads_followers)
+VALUES (date('now'), {stats.x_followers}, {stats.threads_followers});
+</SQL>

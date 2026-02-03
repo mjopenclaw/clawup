@@ -1,0 +1,226 @@
+# pattern-detector.yaml - 패턴 감지기
+# 데이터에서 자동으로 패턴을 감지하고 규칙 후보 생성
+
+detector:
+  id: pattern-detector
+  name: "패턴 감지기"
+  description: "활동 데이터에서 자동으로 패턴을 감지하여 규칙 후보 생성"
+
+  # === 스케줄 ===
+  schedule:
+    cron: "0 4 * * 0"                  # 매주 일요일 새벽 4시
+    timezone: "Asia/Seoul"
+    enabled: true
+
+  # === 패턴 유형 ===
+  pattern_types:
+    # 1. 시계열 패턴
+    - type: "time_series"
+      name: "시계열 패턴"
+      detects:
+        - "주기적 변동"
+        - "추세"
+        - "이상치"
+        - "계절성"
+
+      methods:
+        - name: "trend_detection"
+          description: "상승/하락 추세 감지"
+          algorithm: "linear_regression"
+          min_data_points: 14
+
+        - name: "periodicity"
+          description: "주기적 패턴 감지"
+          algorithm: "autocorrelation"
+          check_periods: [7, 14, 30]    # 일, 주, 월 단위
+
+        - name: "anomaly"
+          description: "이상치 감지"
+          algorithm: "z_score"
+          threshold: 2.5
+
+    # 2. 상관관계 패턴
+    - type: "correlation"
+      name: "상관관계 패턴"
+      detects:
+        - "변수 간 상관관계"
+        - "인과 관계 후보"
+
+      methods:
+        - name: "correlation_matrix"
+          description: "변수 간 상관관계"
+          algorithm: "pearson"
+          min_correlation: 0.5
+
+        - name: "lagged_correlation"
+          description: "시차 상관관계"
+          lags: [1, 3, 7]              # 1일, 3일, 7일 후
+
+    # 3. 클러스터링 패턴
+    - type: "clustering"
+      name: "클러스터링"
+      detects:
+        - "유사한 포스트 그룹"
+        - "성과 그룹"
+
+      methods:
+        - name: "performance_clusters"
+          description: "성과별 포스트 클러스터링"
+          algorithm: "kmeans"
+          n_clusters: 3                 # 저성과, 중성과, 고성과
+
+    # 4. 규칙 패턴 (If-Then)
+    - type: "rule_patterns"
+      name: "조건부 패턴"
+      detects:
+        - "특정 조건 → 특정 결과"
+
+      methods:
+        - name: "association_rules"
+          description: "연관 규칙 마이닝"
+          min_support: 0.1
+          min_confidence: 0.7
+
+  # === 감지 프로세스 ===
+  process:
+    steps:
+      # 1. 데이터 준비
+      - name: "prepare_data"
+        action: "query_and_clean"
+        queries:
+          - "${analyzer.metrics-analyzer.data_sources}"
+        output: "clean_data"
+
+      # 2. 패턴 감지
+      - name: "detect_patterns"
+        for_each: "pattern_type in pattern_types"
+        action: "run_detection"
+        output: "detected_patterns"
+
+      # 3. 패턴 검증
+      - name: "validate_patterns"
+        action: "statistical_validation"
+        tests:
+          - "chi_square"
+          - "t_test"
+          - "bootstrap"
+        min_significance: 0.95
+        output: "validated_patterns"
+
+      # 4. 규칙 후보 생성
+      - name: "generate_rule_candidates"
+        action: "pattern_to_rule"
+        input: "${validated_patterns}"
+        output: "rule_candidates"
+
+      # 5. 실험 제안
+      - name: "propose_experiments"
+        action: "create_experiments"
+        input: "${rule_candidates}"
+        output: "experiment_proposals"
+
+  # === 규칙 후보 생성 ===
+  rule_generation:
+    template:
+      id: "rule_{pattern_id}_{timestamp}"
+      pattern_type: "{pattern_type}"
+      condition: "{condition}"
+      action: "{action}"
+      confidence: "{calculated_confidence}"
+      sample_size: "{n_observations}"
+      statistical_significance: "{p_value}"
+      effect_size: "{effect_size}"
+      status: "candidate"
+      created_at: "{timestamp}"
+      source: "pattern_detector"
+
+    # 신뢰도 계산
+    confidence_calculation: |
+      base_confidence = (1 - p_value) * (sample_size / 30)
+      effect_bonus = effect_size * 0.2
+      confidence = min(base_confidence + effect_bonus, 0.95)
+
+  # === 실험 제안 ===
+  experiment_proposal:
+    # 규칙 후보 → 실험 변환
+    template:
+      id: "exp_{rule_id}"
+      hypothesis: "{rule_condition} → {rule_action} 효과 검증"
+      variable: "{rule_variable}"
+      control: "현재 행동"
+      treatment: "{rule_suggested_change}"
+      duration_days: 7
+      min_samples: 10
+      success_metric: "{affected_metric}"
+      status: "proposed"
+
+    # 자동 시작 조건
+    auto_start:
+      enabled: true
+      conditions:
+        - "confidence >= 0.5"
+        - "estimated_impact >= 'medium'"
+        - "no_conflicting_experiments"
+
+  # === 출력 ===
+  output:
+    # 감지 보고서
+    report:
+      path: "memory/patterns/${date}-patterns.md"
+      template: |
+        # 🔍 패턴 감지 보고서
+
+        > 분석 일시: {timestamp}
+
+        ## 발견된 패턴
+
+        ### 시계열 패턴
+        {time_series_patterns}
+
+        ### 상관관계
+        {correlations}
+
+        ### 규칙 패턴
+        {rule_patterns}
+
+        ## 📋 규칙 후보
+
+        {rule_candidates_table}
+
+        ## 🧪 실험 제안
+
+        {experiment_proposals}
+
+        ## 📊 통계 요약
+
+        - 검증된 패턴: {validated_count}
+        - 생성된 규칙 후보: {rule_count}
+        - 제안된 실험: {experiment_count}
+
+    # 규칙 후보 저장
+    rule_candidates:
+      path: "state/rules.yaml"
+      section: "pending_rules"
+
+    # 실험 제안 저장
+    experiments:
+      path: "state/experiments.yaml"
+      section: "pending"
+
+    # 알림
+    notification:
+      channel: "telegram"
+      send_if: "rule_candidates.length > 0"
+      message: |
+        🔍 **패턴 감지 완료**
+
+        발견된 패턴: {pattern_count}개
+        규칙 후보: {rule_count}개
+        실험 제안: {experiment_count}개
+
+        자세한 내용은 보고서를 확인하세요.
+
+  # === 로깅 ===
+  logging:
+    log_detections: true
+    log_path: "data/pattern_detection_log.json"

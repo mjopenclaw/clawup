@@ -1,0 +1,116 @@
+# follow-back.yaml - 맞팔로우 액션 정의
+
+action:
+  id: follow_back
+  name: "맞팔로우"
+  description: "새 팔로워 중 조건 맞는 계정 맞팔로우"
+  type: "interact"
+
+  # === 경계 참조 ===
+  bounds_ref: "sns.engagement"
+  daily_limit_key: "max_follows_per_day"
+
+  # === 사전 검사 ===
+  pre_checks:
+    - check: "daily_limit"
+      query: |
+        SELECT COUNT(*) as count FROM activity_log
+        WHERE action_type IN ('follow', 'follow_back')
+        AND platform = '{channel}'
+        AND date(created_at) = date('now')
+      condition: "count < ${bounds.sns.engagement.max_follows_per_day}"
+      on_fail: "skip"
+
+  # === 타겟 선택 ===
+  targeting:
+    # 새 팔로워 중에서 선택
+    source: "new_followers"
+    query: |
+      SELECT DISTINCT n.actor_handle, n.actor_followers, n.created_at
+      FROM notifications n
+      LEFT JOIN following f ON n.actor_handle = f.target_handle AND f.platform = '{channel}'
+      WHERE n.type = 'follow'
+      AND n.platform = '{channel}'
+      AND f.target_handle IS NULL  -- 아직 팔로우하지 않은 계정
+      AND n.created_at > date('now', '-7 days')
+      ORDER BY n.created_at DESC
+
+    # 필터 조건
+    filter:
+      min_followers: 10
+      max_followers: 100000
+      min_posts: 5
+      has_profile_image: true
+      not_bot: true
+
+    # 스팸/봇 제외 패턴
+    exclude_patterns:
+      - "bio contains '팔로우하면 팔로우'"
+      - "bio contains 'follow for follow'"
+      - "username matches '^[a-z]+\\d{6,}$'"
+      - "followers < 10 AND following > 1000"
+      - "no_posts_in_30_days"
+
+  # === 실행 단계 ===
+  steps:
+    - name: "get_new_followers"
+      action: "query"
+      sql: "${targeting.query}"
+      params:
+        channel: "${channel.id}"
+      output: "new_followers"
+
+    - name: "filter_followers"
+      action: "filter"
+      input: "${new_followers}"
+      conditions: "${targeting.filter}"
+      exclude: "${targeting.exclude_patterns}"
+      output: "qualified_followers"
+
+    - name: "apply_delay"
+      description: "즉시 맞팔로우하면 봇처럼 보임"
+      filter: |
+        created_at < now() - interval '${channel.actions.follow_back.delay_minutes} minutes'
+      output: "delayed_followers"
+
+    - name: "execute_follow_backs"
+      for_each: "follower in delayed_followers"
+      max_iterations: "${bounds.sns.engagement.max_follows_per_day}"
+      steps:
+        - action: "browser_click"
+          script: "${channel.actions.follow.script}"
+          params:
+            handle: "${follower.actor_handle}"
+
+        - action: "record_activity"
+          table: "activity_log"
+          data:
+            action_type: "follow_back"
+            platform: "${channel.id}"
+            target_handle: "${follower.actor_handle}"
+            created_at: "now()"
+
+        - action: "record_following"
+          table: "following"
+          data:
+            platform: "${channel.id}"
+            target_handle: "${follower.actor_handle}"
+            followed_at: "now()"
+            is_follow_back: true
+
+        - action: "wait"
+          duration: "${channel.actions.follow_back.cooldown_minutes * 60}s"
+
+  # === 결과 처리 ===
+  on_success:
+    - log: "Followed back {count} accounts on {channel}"
+    - metric: "increment follow_backs_today by {count}"
+    - notify: "👥 맞팔로우 완료: {count}명"
+
+  on_failure:
+    - log: "Follow back failed: {error}"
+
+  # === 로깅 ===
+  logging:
+    log_follow_backs: true
+    log_path: "data/engagement_log.json"

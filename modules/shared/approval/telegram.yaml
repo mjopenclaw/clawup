@@ -1,0 +1,120 @@
+# telegram.yaml - 텔레그램 승인 시스템
+# 콘텐츠 검토 및 승인을 텔레그램으로 처리
+
+approval:
+  id: telegram-review
+  name: "텔레그램 검토"
+  description: "텔레그램으로 콘텐츠 검토 요청 전송 및 승인 처리"
+
+  # === 채널 설정 ===
+  channel: telegram
+  target: "${config.telegram.monitor.chat_id}"
+
+  # === 메시지 템플릿 ===
+  message_template: |
+    📝 **포스팅 검토 요청**
+    ─────────────────
+
+    **채널**: {target_channel}
+    **유형**: {content_type}
+    **예정 시간**: {scheduled_time}
+
+    **콘텐츠**:
+    ```
+    {content}
+    ```
+
+    {validation_warnings}
+
+    ─────────────────
+    ✅ 승인: `/approve {request_id}`
+    ✏️ 수정: `/edit {request_id} [수정된 내용]`
+    ❌ 거부: `/reject {request_id} [사유]`
+    ⏰ 예약: `/schedule {request_id} [시간]`
+
+  # === 응답 처리 ===
+  responses:
+    approve:
+      pattern: "/approve {id}"
+      action: "continue"
+      reply: "✅ 승인됨! 포스팅 진행합니다."
+
+    edit:
+      pattern: "/edit {id} {new_content}"
+      action: "replace_and_continue"
+      reply: "✏️ 수정된 내용으로 포스팅합니다."
+
+    reject:
+      pattern: "/reject {id} {reason}"
+      action: "skip"
+      reply: "❌ 거부됨: {reason}"
+      log_reason: true
+
+    schedule:
+      pattern: "/schedule {id} {time}"
+      action: "reschedule"
+      reply: "⏰ {time}에 다시 검토 요청 드리겠습니다."
+
+  # === 타임아웃 설정 ===
+  timeout:
+    duration_minutes: 60              # 1시간 대기
+    action: "skip"                    # skip | auto_approve | retry
+    message: "⏰ 타임아웃: 검토 시간이 초과되어 건너뛰었습니다."
+
+    # 자동 승인 옵션 (선택적)
+    auto_approve:
+      enabled: false
+      conditions:
+        - "confidence > 0.8"
+        - "no_validation_warnings"
+        - "content_type != 'sensitive'"
+
+  # === 검토 대기열 ===
+  queue:
+    max_pending: 10                   # 최대 대기 검토 수
+    priority_order:
+      - "scheduled_soon"              # 예정 시간 임박
+      - "high_confidence"             # 높은 신뢰도
+      - "fifo"                        # 먼저 들어온 순
+
+  # === 알림 설정 ===
+  notifications:
+    # 검토 요청 시
+    on_request:
+      enabled: true
+      sound: true
+
+    # 타임아웃 경고
+    on_timeout_warning:
+      enabled: true
+      before_minutes: 10
+      message: "⚠️ 10분 후 타임아웃: {request_id}"
+
+    # 일일 요약
+    daily_summary:
+      enabled: true
+      time: "21:00"
+      template: |
+        📊 **오늘의 검토 요약**
+        - 승인: {approved_count}
+        - 거부: {rejected_count}
+        - 타임아웃: {timeout_count}
+        - 대기 중: {pending_count}
+
+  # === 빠른 응답 버튼 ===
+  quick_actions:
+    enabled: true
+    buttons:
+      - label: "✅ 승인"
+        action: "approve"
+      - label: "❌ 거부"
+        action: "reject"
+        reason_required: true
+      - label: "📝 수정 필요"
+        action: "request_edit"
+
+  # === 로깅 ===
+  logging:
+    log_requests: true
+    log_responses: true
+    log_path: "data/approval_log.json"

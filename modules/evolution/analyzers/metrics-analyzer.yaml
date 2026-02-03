@@ -1,0 +1,239 @@
+# metrics-analyzer.yaml - 메트릭 분석기
+# 수집된 메트릭을 분석하여 패턴과 인사이트 도출
+
+analyzer:
+  id: metrics-analyzer
+  name: "메트릭 분석기"
+  description: "활동 메트릭을 분석하여 패턴 발견 및 규칙 개선 제안"
+
+  # === 스케줄 ===
+  schedule:
+    cron: "0 23 * * *"                 # 매일 밤 11시
+    timezone: "Asia/Seoul"
+    enabled: true
+
+  # === 분석 대상 ===
+  data_sources:
+    # 포스트 성과
+    - id: "post_performance"
+      name: "포스트 성과"
+      query: |
+        SELECT
+          p.id,
+          p.platform,
+          p.content,
+          p.posted_at,
+          strftime('%H', p.posted_at) as post_hour,
+          strftime('%w', p.posted_at) as post_day,
+          pa.likes,
+          pa.reposts,
+          pa.views,
+          pa.engagement_rate,
+          p.hashtag_count,
+          length(p.content) as content_length
+        FROM posts p
+        LEFT JOIN post_analytics pa ON p.id = pa.post_id
+        WHERE p.posted_at > date('now', '-30 days')
+        ORDER BY p.posted_at DESC
+
+    # 인게이지먼트 활동
+    - id: "engagement_activity"
+      name: "인게이지먼트 활동"
+      query: |
+        SELECT
+          action_type,
+          platform,
+          date(created_at) as date,
+          strftime('%H', created_at) as hour,
+          COUNT(*) as count
+        FROM activity_log
+        WHERE created_at > date('now', '-30 days')
+        GROUP BY action_type, platform, date, hour
+
+    # 팔로워 성장
+    - id: "follower_growth"
+      name: "팔로워 성장"
+      query: |
+        SELECT
+          date,
+          x_followers,
+          threads_followers,
+          x_followers - LAG(x_followers) OVER (ORDER BY date) as x_delta,
+          threads_followers - LAG(threads_followers) OVER (ORDER BY date) as threads_delta
+        FROM daily_stats
+        WHERE date > date('now', '-30 days')
+        ORDER BY date
+
+  # === 분석 유형 ===
+  analyses:
+    # 1. 시간대 분석
+    - id: "timing_analysis"
+      name: "포스팅 시간대 분석"
+      description: "어떤 시간대 포스팅이 성과가 좋은지 분석"
+
+      method: |
+        1. 시간대별 평균 engagement_rate 계산
+        2. 요일별 평균 engagement_rate 계산
+        3. 시간대 x 요일 조합 분석
+        4. 최적 시간대 도출
+
+      output:
+        - metric: "best_hours"
+          description: "최고 성과 시간대"
+        - metric: "avoid_hours"
+          description: "피해야 할 시간대"
+        - metric: "best_days"
+          description: "최고 성과 요일"
+
+      rule_suggestion:
+        target: "state/rules.yaml"
+        path: "timing"
+
+    # 2. 콘텐츠 분석
+    - id: "content_analysis"
+      name: "콘텐츠 분석"
+      description: "어떤 유형의 콘텐츠가 성과가 좋은지 분석"
+
+      method: |
+        1. 콘텐츠 길이별 성과 분석
+        2. 해시태그 수별 성과 분석
+        3. 주제별 성과 분석 (LLM 분류)
+        4. 패턴 도출
+
+      output:
+        - metric: "optimal_length"
+          description: "최적 콘텐츠 길이"
+        - metric: "optimal_hashtags"
+          description: "최적 해시태그 수"
+        - metric: "top_topics"
+          description: "성과 좋은 주제"
+
+      rule_suggestion:
+        target: "state/rules.yaml"
+        path: "content"
+
+    # 3. 인게이지먼트 분석
+    - id: "engagement_analysis"
+      name: "인게이지먼트 분석"
+      description: "인게이지먼트 활동의 효과 분석"
+
+      method: |
+        1. 액션별 팔로워 획득 상관관계
+        2. 댓글 → 팔로우 전환율
+        3. 맞팔로우 유지율
+        4. 최적 인게이지먼트 전략 도출
+
+      output:
+        - metric: "best_engagement_actions"
+          description: "효과적인 인게이지먼트 액션"
+        - metric: "follow_back_retention"
+          description: "맞팔로우 유지율"
+
+      rule_suggestion:
+        target: "state/rules.yaml"
+        path: "engagement"
+
+    # 4. 성장 추세 분석
+    - id: "growth_analysis"
+      name: "성장 추세 분석"
+      description: "팔로워 성장 추세 및 예측"
+
+      method: |
+        1. 일별 성장률 계산
+        2. 주별 트렌드 분석
+        3. 성장에 영향 준 요인 분석
+        4. 목표 달성 예측
+
+      output:
+        - metric: "avg_daily_growth"
+          description: "평균 일일 성장"
+        - metric: "growth_trend"
+          description: "성장 추세 (상승/하락/정체)"
+        - metric: "goal_eta"
+          description: "목표 달성 예상일"
+
+  # === 규칙 업데이트 ===
+  rule_updates:
+    auto_apply:
+      enabled: true
+      confidence_threshold: 0.7        # bounds.yaml 참조
+
+    approval_required:
+      threshold: 0.9
+      channel: "telegram"
+
+    process:
+      - step: "calculate_confidence"
+        method: |
+          confidence = (sample_size / min_sample) * (effect_size / min_effect) * statistical_significance
+          confidence = min(confidence, 1.0)
+
+      - step: "validate_within_bounds"
+        check: "bounds.yaml"
+
+      - step: "apply_or_propose"
+        condition: |
+          if confidence >= auto_apply_threshold:
+            auto_apply()
+          elif confidence >= proposal_threshold:
+            request_approval()
+          else:
+            log_for_more_data()
+
+  # === 출력 ===
+  output:
+    # 분석 보고서
+    report:
+      path: "memory/analysis/${date}-metrics.md"
+      template: |
+        # 📊 일일 메트릭 분석
+
+        > 분석 일시: {timestamp}
+        > 분석 기간: 최근 30일
+
+        ## 🕐 시간대 분석
+
+        ### 최적 포스팅 시간
+        {best_hours_chart}
+
+        ### 요일별 성과
+        {day_performance}
+
+        ## 📝 콘텐츠 분석
+
+        ### 길이별 성과
+        {length_analysis}
+
+        ### 해시태그 효과
+        {hashtag_analysis}
+
+        ## 📈 성장 분석
+
+        {growth_chart}
+
+        - 평균 일일 성장: {avg_daily_growth}
+        - 추세: {growth_trend}
+        - 목표 달성 예상: {goal_eta}
+
+        ## 🎯 규칙 업데이트 제안
+
+        {rule_suggestions}
+
+        ## 💡 인사이트
+
+        {key_insights}
+
+    # 규칙 업데이트
+    rules_update:
+      path: "state/rules.yaml"
+      backup_before_update: true
+
+    # 알림
+    notification:
+      channel: "telegram"
+      send_if: "has_significant_insights OR rule_updates_proposed"
+
+  # === 로깅 ===
+  logging:
+    log_analyses: true
+    log_path: "data/metrics_analysis_log.json"

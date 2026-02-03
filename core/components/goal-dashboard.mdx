@@ -1,0 +1,48 @@
+## 🎯 목표 대시보드 (Goal-Driven System)
+
+> Cron들은 이 목표를 참조해서 전략을 조정함. 컴파일 시마다 갱신.
+
+### 현재 진행률
+
+| 목표 | 현재 | 타겟 | 진행률 | 우선순위 |
+|------|------|------|--------|----------|
+| X 팔로워 | {{ $goals.x_followers.current }} | {{ $goals.x_followers.target }} | {{ $goals.x_followers.progress }}% | 🔴 P{{ $goals.x_followers.priority }} |
+| Threads 팔로워 | {{ $goals.threads_followers.current }} | {{ $goals.threads_followers.target }} | {{ $goals.threads_followers.progress }}% | P{{ $goals.threads_followers.priority }} |
+| Engagement Rate | {{ $goals.engagement_rate.current }}% | {{ $goals.engagement_rate.target }}% | {{ $goals.engagement_rate.progress }}% | P{{ $goals.engagement_rate.priority }} |
+
+### 🔥 가장 급한 목표
+
+**X 팔로워**: {{ $goals.x_followers.current }} / {{ $goals.x_followers.target }}
+
+### 📈 전략 우선순위
+
+**P1: X 팔로워 {{ $goals.x_followers.target }}명**
+{{% for $strategy in $goals.x_followers.strategies %}}
+- {{ $strategy }}
+{{% end %}}
+
+**P2: Threads 팔로워 {{ $goals.threads_followers.target }}명**
+{{% for $strategy in $goals.threads_followers.strategies %}}
+- {{ $strategy }}
+{{% end %}}
+
+**P3: Shorts 자동화**
+{{% for $strategy in $goals.shorts_pipeline.strategies %}}
+- {{ $strategy }}
+{{% end %}}
+
+### ⚡ Cron 행동 지침
+
+```
+if X팔로워 < 100:
+  → Reply Guy 집중 (하루 20+ 답글)
+  → 포스팅 빈도 ↑
+  
+if X팔로워 >= 100 and < 500:
+  → 스레드 퀄리티 ↑
+  → 맞팔 정리 (팔로잉 비율 관리)
+  
+if X팔로워 >= 500:
+  → 콘텐츠 다양화
+  → 수익화 준비
+```

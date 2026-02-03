@@ -1,0 +1,116 @@
+# Strategy Analyzer - Goal-Driven Cron
+# 데이터 기반으로 최적 전략 도출 → self_improvement_rules 업데이트
+
+cron:
+  id: "strategy-analyzer"
+  schedule: "0 */4 * * *"  # 4시간마다
+  max_duration_minutes: 45
+
+goal:
+  id: "strategy_optimization"
+  target: 1  # 항상 최적화된 전략 유지
+  metric: |
+    SELECT COUNT(*) FROM self_improvement_rules 
+    WHERE validated_at > datetime('now', '-7 days')
+
+phases:
+  plan:
+    checks:
+      - name: "enough_data"
+        query: "SELECT COUNT(*) FROM post_analytics WHERE posted_at > date('now', '-7 days')"
+        min_value: 5
+        fail_message: "분석할 데이터가 부족함 (최소 5개 필요)"
+
+  research:
+    enabled: true
+    analyses:
+      - name: "best_posting_time"
+        query: |
+          SELECT 
+            strftime('%H', posted_at) as hour,
+            AVG(likes + replies + retweets) as avg_engagement
+          FROM post_analytics
+          WHERE posted_at > date('now', '-30 days')
+          GROUP BY hour
+          HAVING COUNT(*) >= 2
+          ORDER BY avg_engagement DESC
+          LIMIT 3
+        output: "optimal_hours"
+      
+      - name: "best_topic"
+        query: |
+          SELECT 
+            topic,
+            AVG(engagement_rate) as avg_rate,
+            COUNT(*) as post_count
+          FROM post_analytics
+          WHERE posted_at > date('now', '-14 days')
+          GROUP BY topic
+          HAVING post_count >= 2
+          ORDER BY avg_rate DESC
+          LIMIT 3
+        output: "optimal_topics"
+      
+      - name: "content_length_impact"
+        query: |
+          SELECT 
+            CASE 
+              WHEN content_length < 100 THEN 'short'
+              WHEN content_length < 200 THEN 'medium'
+              ELSE 'long'
+            END as length_category,
+            AVG(engagement_rate) as avg_rate
+          FROM post_analytics
+          WHERE posted_at > date('now', '-14 days')
+          GROUP BY length_category
+          ORDER BY avg_rate DESC
+        output: "optimal_length"
+
+  execute:
+    steps:
+      - name: "generate_rules"
+        action: "ai_analysis"
+        prompt: |
+          분석 결과를 바탕으로 규칙 생성:
+          - 최적 시간: {optimal_hours}
+          - 최적 주제: {optimal_topics}
+          - 최적 길이: {optimal_length}
+          
+          SQL INSERT 문으로 변환해줘.
+      
+      - name: "insert_rules"
+        action: "db_execute"
+        query: |
+          INSERT OR REPLACE INTO self_improvement_rules 
+          (category, rule, confidence, source, validated_at)
+          VALUES 
+          ('timing', ?, 0.7, 'auto_analysis', datetime('now')),
+          ('content', ?, 0.7, 'auto_analysis', datetime('now'))
+      
+      - name: "archive_old_rules"
+        action: "db_update"
+        query: |
+          UPDATE self_improvement_rules 
+          SET active = 0 
+          WHERE validated_at < datetime('now', '-30 days')
+
+  feedback:
+    measure_after_minutes: 0
+    actions:
+      - name: "count_active_rules"
+        query: "SELECT COUNT(*) FROM self_improvement_rules WHERE active = 1"
+      
+      - name: "report"
+        action: "log"
+        template: "전략 분석 완료: {count_active_rules} 활성 규칙"
+
+  retry:
+    max_attempts: 1  # 분석은 재시도 불필요
+    on_failure:
+      - "log_error"
+
+notifications:
+  on_success:
+    channel: "telegram"
+    bot: "monitor"
+    message: "🧠 전략 분석 완료 - {new_rules_count} 새 규칙 추가"

@@ -1,0 +1,79 @@
+# _template.yaml - 수익원 어댑터 템플릿
+# 새 수익원을 추가할 때 이 템플릿을 복사해서 사용
+
+source:
+  # === 기본 정보 ===
+  id: "{source_id}"
+  name: "{Source Name}"
+  description: "{수익원 설명}"
+  category: "{category}"               # affiliate | freelance | content | service | investment
+  enabled: true
+
+  # === 수익 유형 ===
+  revenue:
+    type: "recurring"                  # recurring | one_time | variable
+    estimated_monthly_usd: 0
+    payment_frequency: "monthly"       # monthly | weekly | per_task
+
+  # === 요구사항 ===
+  requirements:
+    initial_setup:
+      - "{설정 단계 1}"
+      - "{설정 단계 2}"
+
+    ongoing:
+      - "{지속 요구사항}"
+
+    tools_needed:
+      - "{필요한 도구/계정}"
+
+  # === 모니터링 ===
+  monitoring:
+    health_check:
+      enabled: true
+      schedule: "0 9 * * *"            # 매일 아침
+      checks:
+        - type: "api_status"
+          endpoint: "{api_endpoint}"
+        - type: "earnings_check"
+          query: "{earnings_query}"
+
+    alerts:
+      - condition: "earnings_drop > 20%"
+        severity: "medium"
+      - condition: "account_issue"
+        severity: "high"
+
+  # === 자동화 ===
+  automation:
+    supported_actions:
+      - action: "{action_name}"
+        description: "{액션 설명}"
+        automated: true
+        script: "{script_path}"
+
+    opportunities:
+      discovery:
+        enabled: true
+        method: "{discovery_method}"
+      auto_apply:
+        enabled: false
+        require_approval: true
+
+  # === 메트릭 ===
+  metrics:
+    tracked:
+      - id: "earnings"
+        name: "수익"
+        query: "{earnings_query}"
+      - id: "tasks_completed"
+        name: "완료 작업"
+        query: "{tasks_query}"
+
+  # === 안전 설정 ===
+  safety:
+    max_investment_usd: 0
+    risk_level: "low"                  # low | medium | high
+    require_approval_for:
+      - "any_payment"
+      - "account_change"

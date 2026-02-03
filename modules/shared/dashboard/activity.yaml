@@ -1,0 +1,174 @@
+# activity.yaml - 활동 대시보드
+# 활동 현황 대시보드 자동 생성
+
+dashboard:
+  id: activity-dashboard
+  name: "활동 대시보드"
+  description: "SNS 활동 현황 및 성장 지표 대시보드"
+
+  # === 출력 설정 ===
+  output:
+    - type: "markdown"
+      path: "memory/dashboard.md"
+      auto_update: true
+
+    - type: "html"
+      path: "data/dashboard.html"
+
+    - type: "telegram"
+      send_to: "${config.telegram.monitor.chat_id}"
+      schedule: "0 9 * * *"           # 매일 아침 9시
+
+  # === 섹션 정의 ===
+  sections:
+    # --- 오늘 활동 ---
+    - name: "오늘 활동"
+      id: "today_activity"
+      query: |
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN action_type='post' THEN 1 ELSE 0 END) as posts,
+          SUM(CASE WHEN action_type='like' THEN 1 ELSE 0 END) as likes,
+          SUM(CASE WHEN action_type='follow' THEN 1 ELSE 0 END) as follows,
+          SUM(CASE WHEN action_type='reply' THEN 1 ELSE 0 END) as replies,
+          SUM(CASE WHEN action_type='repost' THEN 1 ELSE 0 END) as reposts
+        FROM activity_log
+        WHERE date(created_at) = date('now')
+      format: "summary"
+
+    # --- 성장 지표 ---
+    - name: "성장 지표 (7일)"
+      id: "growth_metrics"
+      query: |
+        SELECT
+          date,
+          x_followers,
+          threads_followers,
+          (x_followers - LAG(x_followers) OVER (ORDER BY date)) as x_delta,
+          (threads_followers - LAG(threads_followers) OVER (ORDER BY date)) as threads_delta
+        FROM daily_stats
+        ORDER BY date DESC
+        LIMIT 7
+      format: "table"
+
+    # --- 목표 진행률 ---
+    - name: "목표 진행률"
+      id: "goal_progress"
+      query: |
+        SELECT
+          goal_name,
+          current_value,
+          target_value,
+          ROUND(current_value * 100.0 / target_value, 1) as progress_pct
+        FROM goals
+        WHERE active = 1
+      format: "progress_bars"
+
+    # --- 최고 성과 포스트 ---
+    - name: "이번 주 베스트 포스트"
+      id: "top_posts"
+      query: |
+        SELECT
+          platform,
+          SUBSTR(content, 1, 50) || '...' as preview,
+          likes,
+          reposts,
+          views,
+          (likes + reposts * 2) as engagement_score
+        FROM posts
+        WHERE posted_at > date('now', '-7 days')
+        ORDER BY engagement_score DESC
+        LIMIT 5
+      format: "list"
+
+    # --- 실험 현황 ---
+    - name: "진행 중인 실험"
+      id: "experiments"
+      source: "state/experiments.yaml"
+      path: "running"
+      format: "list"
+
+    # --- 규칙 변경 ---
+    - name: "최근 규칙 변경"
+      id: "rule_changes"
+      source: "state/rules.yaml"
+      path: "history"
+      limit: 5
+      format: "list"
+
+  # === 템플릿 ===
+  template: |
+    # 📊 활동 대시보드
+
+    > 생성: {generated_at}
+
+    ---
+
+    ## 📅 오늘 ({date})
+
+    | 활동 | 횟수 |
+    |------|------|
+    | 포스팅 | {today.posts} |
+    | 좋아요 | {today.likes} |
+    | 팔로우 | {today.follows} |
+    | 답글 | {today.replies} |
+    | 리포스트 | {today.reposts} |
+    | **합계** | **{today.total}** |
+
+    ---
+
+    ## 📈 성장 (7일)
+
+    | 날짜 | X 팔로워 | 변화 | Threads 팔로워 | 변화 |
+    |------|----------|------|----------------|------|
+    {growth_table}
+
+    ---
+
+    ## 🎯 목표 진행률
+
+    {goal_progress_bars}
+
+    ---
+
+    ## ⭐ 이번 주 베스트
+
+    {top_posts_list}
+
+    ---
+
+    ## 🧪 진행 중인 실험
+
+    {experiments_list}
+
+    ---
+
+    ## 📝 최근 규칙 변경
+
+    {rule_changes_list}
+
+    ---
+
+    *자동 생성됨 by OpenClaw Framework*
+
+  # === 스케줄 ===
+  schedule:
+    # 정기 생성
+    cron: "0 9,21 * * *"              # 아침 9시, 저녁 9시
+
+    # 이벤트 트리거
+    on_events:
+      - "goal_achieved"
+      - "experiment_completed"
+      - "daily_summary"
+
+  # === 알림 ===
+  notifications:
+    telegram:
+      enabled: true
+      target: "${config.telegram.monitor.chat_id}"
+
+    include_sections:
+      - "today_activity"
+      - "goal_progress"
+      - "top_posts"

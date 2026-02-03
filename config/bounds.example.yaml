@@ -1,0 +1,31 @@
+# bounds.yaml - Safety Limits
+# ⚠️ AI cannot modify this file. Human-only.
+
+daily_limits:
+  posts:
+    x: 5
+    threads: 5
+  engagement:
+    likes: 50
+    follows: 20
+    reposts: 10
+    replies: 20
+  hourly:
+    likes: 10
+    follows: 5
+
+content:
+  forbidden_topics:
+    - "politics"
+    - "religion"
+    - "personal info"
+    - "financial advice"
+  allowed_languages:
+    - "ko"
+    - "en"
+
+automation:
+  max_consecutive_failures: 3
+  cooldown_minutes:
+    after_post: 30
+    after_error: 60
