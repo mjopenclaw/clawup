@@ -1,7 +1,7 @@
 {
   "name": "openclaw-framework",
   "version": "1.0.0",
-  "description": "AI 에이전트를 위한 자가 발전 자동화 프레임워크",
+  "description": "Self-evolving automation framework for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",

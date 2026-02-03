@@ -1,7 +1,6 @@
--- OpenClaw Framework DB Schema
--- 프레임워크 핵심 데이터만
+-- ClawUp Framework Database Schema
 
--- 피드백 기록
+-- Feedback records
 CREATE TABLE IF NOT EXISTS feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT DEFAULT (date('now')),
@@ -11,7 +10,7 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 학습/교훈 기록
+-- Learnings and insights
 CREATE TABLE IF NOT EXISTS learnings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT DEFAULT (date('now')),
@@ -24,7 +23,7 @@ CREATE TABLE IF NOT EXISTS learnings (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 원칙 저장
+-- Core principles
 CREATE TABLE IF NOT EXISTS principles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category TEXT,
@@ -34,29 +33,52 @@ CREATE TABLE IF NOT EXISTS principles (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 세션 요약 (context 유지)
-CREATE TABLE IF NOT EXISTS session_summaries (
+-- Activity log
+CREATE TABLE IF NOT EXISTS activity_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_key TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  topics TEXT,
-  decisions TEXT,
-  todos TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  message_count INTEGER,
-  source TEXT
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  action TEXT NOT NULL,
+  target TEXT,
+  result TEXT,
+  metadata TEXT
 );
 
--- 할 일 관리
-CREATE TABLE IF NOT EXISTS tasks (
+-- Rules (learned behaviors)
+CREATE TABLE IF NOT EXISTS rules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  description TEXT,
-  priority INTEGER DEFAULT 0,
+  category TEXT,
+  rule TEXT NOT NULL,
+  confidence REAL DEFAULT 0.5,
+  source TEXT,
+  active INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Experiments
+CREATE TABLE IF NOT EXISTS experiments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hypothesis TEXT NOT NULL,
+  method TEXT,
   status TEXT DEFAULT 'pending',
-  due_date TEXT,
+  results TEXT,
+  conclusion TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   completed_at DATETIME
 );
 
-CREATE INDEX IF NOT EXISTS idx_ss_created_at ON session_summaries(created_at DESC);
+-- Daily stats
+CREATE TABLE IF NOT EXISTS daily_stats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT UNIQUE DEFAULT (date('now')),
+  actions_count INTEGER DEFAULT 0,
+  success_count INTEGER DEFAULT 0,
+  error_count INTEGER DEFAULT 0,
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp);
+CREATE INDEX IF NOT EXISTS idx_rules_category ON rules(category);
+CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date);

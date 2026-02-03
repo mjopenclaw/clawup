@@ -1,13 +1,13 @@
 # ClawUp 🐾
 
-Self-evolving SNS automation framework for [OpenClaw](https://github.com/openclaw/openclaw).
+Self-evolving automation framework for [OpenClaw](https://github.com/openclaw/openclaw).
 
 ## Features
 
-- **CLI-first**: All SNS actions via command line
-- **Self-evolving rules**: Learn optimal posting times, hashtags, engagement patterns
+- **CLI-first**: All operations via command line
+- **Self-evolving rules**: Learn and optimize behavior over time
 - **Safety bounds**: Human-controlled limits AI cannot override
-- **Multi-platform**: X (Twitter), Threads support
+- **Modular design**: Extensible module system
 
 ## Quick Start
 
@@ -31,25 +31,6 @@ pnpm build
 npx tsx src/cli/index.ts status
 ```
 
-## CLI Usage
-
-```bash
-# Status
-cli status
-
-# Post (requires approval)
-cli post -c x -t "content" --dry-run
-
-# Engagement (autonomous within bounds)
-cli engage -c x -a like --limit 10
-cli engage -c x -a follow-back
-cli engage -c x -a repost --limit 5
-
-# Content
-cli content collect    # Gather trends
-cli content metrics    # View analytics
-```
-
 ## Architecture
 
 ```
@@ -69,7 +50,7 @@ clawup/
 ## Philosophy
 
 - **Bounds are sacred**: `bounds.yaml` = human-only limits
-- **Rules evolve**: `state/rules.yaml` = AI-learned optimizations
+- **Rules evolve**: `state/rules.yaml` = AI-learned optimizations  
 - **Code is stable**: Source rarely changes; behavior changes via config
 
 ## License
